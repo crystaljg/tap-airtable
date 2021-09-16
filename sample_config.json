@@ -1,0 +1,8 @@
+{
+	"email": "cgong@actbluetech.com",
+	"api_token": "$ZENDESK_API_KEY",
+	"subdomain": "actblue",
+	"start_date": "2010-01-01T00:00:00Z",
+  "base_id": "appkSma30OJOeMSBR",
+  "tables": ["Campaigns", "Ballot Measures", "People", "Partners", "Jurisdictions", "Activities"]
+}
