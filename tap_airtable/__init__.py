@@ -18,21 +18,24 @@ def get_abs_path(path):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
 
 
-def normalize_name(field):
-    # lowercase, remove non-alpha chars, replace space with underscore
+def normalize(field):
+    """
+    Lowercases, removes non-alpha characters, and replaces space with underscore
+    """
     return re.sub("[^a-z ]+", "", field.lower()).replace(" ", "_")
 
 
-def get_schema(base, table):
+def get_table_schema(base, table):
     """
     creates a raw schema for the given table in the airtable base
     """
-    schema = {
-        "type": ["null", "object"],
-        "additionalProperties": False,
-        "properties": {
-            "airtable_id": {"type": ["string"]},
-            "created_time": {
+    raw_schema = {
+    "type": ["null", "object"],
+    "additionalProperties": "false",
+
+    "properties": {
+            "airtable_id": {"type": "string"},
+            "createdTime": {
                 "anyOf": [
                     {
                         "type": ["null", "string"],
@@ -46,18 +49,17 @@ def get_schema(base, table):
         }
     }
 
+  # TODO: throw error if table in config doesn't match table in base
     table_data = base.all(table)
 
     for row in table_data:
         for field, value in row["fields"].items():
 
-            clean_field = normalize_name(field)
-
             inferred_type = infer_type(value)
-            schema['properties'][clean_field] = {
+            raw_schema["properties"][field] = {
                 "type": ["null", inferred_type]}
 
-    return Schema(schema)
+    return raw_schema
 
 
 def infer_type(datum):
@@ -81,39 +83,49 @@ def infer_type(datum):
     return 'string'
 
 
-def discover_schemas(config):
+def create_schema_files(config):
     """
-    Creates a dict containing schema for each table given in the config
+    Creates a schema.json for each table given in the config
     """
     base = Base(config["api_key"], config["base_id"])
-    raw_schemas = {}
 
     for table in config["tables"]:
-        stream = normalize_name(table)
-        schema = get_schema(base, table)
+        table_schema = get_table_schema(base, table)
 
-        raw_schemas[stream] = schema
+        with open(f"{get_abs_path('schemas')}/{table}.json", "w") as fout:
+          fout.write(json.dumps(table_schema))
 
-    return raw_schemas
+def load_schemas(config):
+  """ Load schemas from schemas folder"""
+  schemas = {}
+  
+  for filename in os.listdir(get_abs_path('schemas')):
+      path = get_abs_path('schemas') + '/' + filename
+      file_raw = filename.replace('.json', '')
+      with open(path) as file:
+          schemas[file_raw] = Schema.from_dict(json.load(file))
+  return schemas
 
 
 def discover(config):
     LOGGER.info("Starting discover")
-    raw_schemas = discover_schemas(config)
 
-    streams = []
+    # each airtable base is different so the schemas must be created
+    create_schema_files(config)
+    raw_schemas=load_schemas(config)
+
+    streams=[]
     for stream_id, schema in raw_schemas.items():
-        # all streams get replicated by default
-        stream_metadata = {"inclusion": "automatic",
-                           "table-key-properties": ["id"],
-                           "replication_method": "FULL_TABLE"}
-        key_properties = ["airtable_id"]
+        stream_metadata=metadata.get_standard_metadata(schema.to_dict(),
+                                           stream_id,
+                                           replication_method = 'FULL_TABLE')
+
         streams.append(
             CatalogEntry(
                 tap_stream_id=stream_id,
                 stream=stream_id,
                 schema=schema,
-                key_properties=key_properties,
+                key_properties=["airtable_id"],
                 metadata=stream_metadata,
                 replication_key=None,
                 is_view=None,
@@ -128,14 +140,28 @@ def discover(config):
     return catalog  # Catalog(streams)
 
 
+def tap_table_data(base, table):
+    table = base.all(table)
+
+    for record in table.iterate(page_size=100):
+      flat_record = {}
+
+      flat_record["airtable_id"] = record.id
+      flat_record["createdTime"] = record.createdTime
+      for field, value in record.fields.items():
+        flat_record[field] = value
+      
+      yield flat_record
+
+
+
+
+
 def sync(config, state, catalog):
     """ Sync data from tap source """
     # Loop over selected streams in catalog
     for stream in catalog.get_selected_streams(state):
         LOGGER.info("Syncing stream:" + stream.tap_stream_id)
-
-        bookmark_column = stream.replication_key
-        is_sorted = True  # TODO: indicate whether data is sorted ascending on bookmark value
 
         singer.write_schema(
             stream_name=stream.tap_stream_id,
@@ -143,26 +169,11 @@ def sync(config, state, catalog):
             key_properties=stream.key_properties,
         )
 
-        # TODO: delete and replace this inline function with your own data retrieval process:
-        def tap_data(): return [{"id": x, "name": "row${x}"}
-                                for x in range(1000)]
+        base = Base(config["api_key"], config["base_id"])
 
-        max_bookmark = None
-        for row in tap_data():
-            # TODO: place type conversions or transformations here
-
+        for row in tap_table_data(base, stream.tap_stream_id):
             # write one or more rows to the stream:
             singer.write_records(stream.tap_stream_id, [row])
-            if bookmark_column:
-                if is_sorted:
-                    # update bookmark to latest value
-                    singer.write_state(
-                        {stream.tap_stream_id: row[bookmark_column]})
-                else:
-                    # if data unsorted, save max value until end of writes
-                    max_bookmark = max(max_bookmark, row[bookmark_column])
-        if bookmark_column and not is_sorted:
-            singer.write_state({stream.tap_stream_id: max_bookmark})
     return
 
 
