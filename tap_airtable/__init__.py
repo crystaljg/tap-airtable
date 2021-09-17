@@ -119,6 +119,8 @@ def discover(config):
         stream_metadata=metadata.get_standard_metadata(schema.to_dict(),
                                            stream_id,
                                            replication_method = 'FULL_TABLE')
+        for field in stream_metadata:
+          field["metadata"]["selected"] = "true" 
 
         streams.append(
             CatalogEntry(
