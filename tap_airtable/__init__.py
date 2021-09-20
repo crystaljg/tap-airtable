@@ -30,10 +30,10 @@ def get_table_schema(base, table):
     creates a raw schema for the given table in the airtable base
     """
     raw_schema = {
-    "type": ["null", "object"],
-    "additionalProperties": "false",
+        "type": ["null", "object"],
+        "additionalProperties": "false",
 
-    "properties": {
+        "properties": {
             "airtable_id": {"type": "string"},
             "createdTime": {
                 "anyOf": [
@@ -50,6 +50,7 @@ def get_table_schema(base, table):
     }
 
   # TODO: throw error if table in config doesn't match table in base
+  # TODO: change this to table.iterate
     table_data = base.all(table)
 
     for row in table_data:
@@ -93,18 +94,19 @@ def create_schema_files(config):
         table_schema = get_table_schema(base, table)
 
         with open(f"{get_abs_path('schemas')}/{table}.json", "w") as fout:
-          fout.write(json.dumps(table_schema))
+            fout.write(json.dumps(table_schema))
+
 
 def load_schemas(config):
-  """ Load schemas from schemas folder"""
-  schemas = {}
-  
-  for filename in os.listdir(get_abs_path('schemas')):
-      path = get_abs_path('schemas') + '/' + filename
-      file_raw = filename.replace('.json', '')
-      with open(path) as file:
-          schemas[file_raw] = Schema.from_dict(json.load(file))
-  return schemas
+    """ Load schemas from schemas folder"""
+    schemas = {}
+
+    for filename in os.listdir(get_abs_path('schemas')):
+        path = get_abs_path('schemas') + '/' + filename
+        file_raw = filename.replace('.json', '')
+        with open(path) as file:
+            schemas[file_raw] = Schema.from_dict(json.load(file))
+    return schemas
 
 
 def discover(config):
@@ -112,15 +114,15 @@ def discover(config):
 
     # each airtable base is different so the schemas must be created
     create_schema_files(config)
-    raw_schemas=load_schemas(config)
+    raw_schemas = load_schemas(config)
 
-    streams=[]
+    streams = []
     for stream_id, schema in raw_schemas.items():
-        stream_metadata=metadata.get_standard_metadata(schema.to_dict(),
-                                           stream_id,
-                                           replication_method = 'FULL_TABLE')
+        stream_metadata = metadata.get_standard_metadata(schema.to_dict(),
+                                                         stream_id,
+                                                         replication_method='FULL_TABLE')
         for field in stream_metadata:
-          field["metadata"]["selected"] = "true" 
+            field["metadata"]["selected"] = "true"
 
         streams.append(
             CatalogEntry(
@@ -143,20 +145,17 @@ def discover(config):
 
 
 def tap_table_data(base, table):
-    table = base.all(table)
+    for table in base.iterate(table, page_size=100):
+        for record in table:
 
-    for record in table.iterate(page_size=100):
-      flat_record = {}
+            flat_record = {}
 
-      flat_record["airtable_id"] = record.id
-      flat_record["createdTime"] = record.createdTime
-      for field, value in record.fields.items():
-        flat_record[field] = value
-      
-      yield flat_record
+            flat_record["airtable_id"] = record["id"]
+            flat_record["createdTime"] = record["createdTime"]
+            for field, value in record["fields"].items():
+                flat_record[field] = value
 
-
-
+            yield flat_record
 
 
 def sync(config, state, catalog):
@@ -167,13 +166,13 @@ def sync(config, state, catalog):
 
         singer.write_schema(
             stream_name=stream.tap_stream_id,
-            schema=stream.schema,
+            schema=stream.schema.to_dict(),
             key_properties=stream.key_properties,
         )
 
-        base = Base(config["api_key"], config["base_id"])
+        table = Base(config["api_key"], config["base_id"])
 
-        for row in tap_table_data(base, stream.tap_stream_id):
+        for row in tap_table_data(table, stream.tap_stream_id):
             # write one or more rows to the stream:
             singer.write_records(stream.tap_stream_id, [row])
     return
