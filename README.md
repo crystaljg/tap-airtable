@@ -6,15 +6,13 @@ spec](https://github.com/singer-io/getting-started/blob/master/SPEC.md).
 
 This tap:
 
-- Pulls raw data from [FIXME](http://example.com)
-- Extracts the following resources:
-  - [FIXME](http://example.com)
+- Pulls raw data from an [Airtable base](https://airtable.com/api)
+- Extracts the entirety of each table named in the config file
 - Outputs the schema for each resource
-- Incrementally pulls data based on the input state
 
 
 # Config
-Because each Airtable base has custom tables and table names unique to each base, each tablename must be delineated in the config. In the future, Airtable's [Metadata API](https://airtable.com/api/meta) may be used in schema discovery, but registration for this API is currently closed.
+Because each Airtable base has custom tables and table names unique to each base, the schema is newly discovered upon each `discover`. In the future, Airtable's [Metadata API](https://airtable.com/api/meta) may be used in schema discovery, but registration for this API is currently closed. 
 
 ---
 
