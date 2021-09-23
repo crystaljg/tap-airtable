@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import glob
 import json
 import re
 import singer
@@ -69,7 +70,6 @@ def infer_type(datum):
     """
     if datum is None or datum == '':
         return None
-
     try:
         int(str(datum))
         return 'integer'
@@ -88,13 +88,24 @@ def create_schema_files(config):
     """
     Creates a schema.json for each table given in the config
     """
+
+    schema_folder = get_abs_path('schemas')
+
+    clear_files(schema_folder)  # clear out any existing files in the folder
+
     base = Base(config["api_key"], config["base_id"])
 
     for table in config["tables"]:
         table_schema = get_table_schema(base, table)
 
-        with open(f"{get_abs_path('schemas')}/{table}.json", "w") as fout:
+        with open(f"{schema_folder}/{table}.json", "w") as fout:
             fout.write(json.dumps(table_schema))
+
+
+def clear_files(folder):
+    files = glob.glob(f"{folder}/*")
+    for f in files:
+        os.remove(f)
 
 
 def load_schemas(config):
