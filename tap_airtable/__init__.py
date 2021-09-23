@@ -68,8 +68,15 @@ def infer_type(datum):
     """
     Returns the inferred data type
     """
+    # TODO: sample more than one datum to determine type? 
+    # sometimes a column full of ints has a sneaky string
+    # and breaks db upload
     if datum is None or datum == '':
         return None
+    if isinstance(datum, dict):
+        return 'object'
+    if isinstance(datum, list):
+        return 'array'
     try:
         int(str(datum))
         return 'integer'
