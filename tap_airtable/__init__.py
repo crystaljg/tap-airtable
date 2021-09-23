@@ -50,9 +50,8 @@ def get_table_schema(base, table):
         }
     }
 
-  # TODO: throw error if table in config doesn't match table in base
-  # TODO: change this to table.iterate
-    table_data = base.all(table)
+    # TODO: throw error if table in config doesn't match table in base
+    table_data = (record for page in base.iterate(table) for record in page)
 
     for row in table_data:
         for field, value in row["fields"].items():
