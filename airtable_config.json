@@ -1,10 +1,10 @@
 {
-  "email": "cgong@actbluetech.com",
+  "email": "",
   "api_key": "",
-  "subdomain": "actblue",
+  "subdomain": "",
   "start_date": "2010-01-01T00:00:00Z",
-  "base_name": "federal-bls-2022-cycle",
-  "base_id": "appkSma30OJOeMSBR",
+  "base_name": "",
+  "base_id": "",
   "tables": [
     "Campaigns",
     "Ballot Measures",
